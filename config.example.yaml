@@ -1,0 +1,10 @@
+# Example configuration for FramePack
+# Copy this file to config.yaml and edit as needed for your environment
+
+server: 0.0.0.0
+port: 7860
+share: false
+inbrowser: true
+model_dir: /path/to/your/models
+hf_token: your_huggingface_token
+# Add other options as needed
