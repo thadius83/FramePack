@@ -3,6 +3,49 @@
 
 set -e
 
+# Install CUDA and cuDNN dependencies
+echo "Setting up NVIDIA CUDA and cuDNN dependencies..."
+if command -v sudo &>/dev/null && [ "$(id -u)" -ne 0 ]; then
+  # We're not root, use sudo
+  sudo_cmd="sudo"
+else
+  # We're root or sudo is not available
+  sudo_cmd=""
+fi
+
+# Download and install CUDA keyring
+wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.0-1_all.deb
+$sudo_cmd dpkg -i cuda-keyring_1.0-1_all.deb
+rm cuda-keyring_1.0-1_all.deb
+
+# Download and set up cuDNN
+wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
+$sudo_cmd mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
+$sudo_cmd apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub
+$sudo_cmd add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" -y
+$sudo_cmd apt-get update
+
+# Install cuDNN libraries
+$sudo_cmd apt-get install -y libcudnn8=8.9.0.*-1+cuda11.8 libcudnn8-dev=8.9.0.*-1+cuda11.8 || {
+  echo "Failed to install specific cuDNN version, trying generic install..."
+  $sudo_cmd apt-get install -y libcudnn8 libcudnn8-dev
+}
+
+# Install recommended packages
+$sudo_cmd apt-get install -y zlib1g g++ freeglut3-dev \
+    libx11-dev libxmu-dev libxi-dev libglu1-mesa libglu1-mesa-dev libfreeimage-dev
+
+# Set CUDA environment variables
+export PATH=$PATH:/usr/local/cuda/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64
+export XLA_FLAGS="--xla_gpu_cuda_data_dir=/usr/local/cuda"
+
+# Save CUDA environment variables to be sourced later
+echo "# CUDA Environment Variables" > .cuda_env
+echo "export PATH=\$PATH:/usr/local/cuda/bin" >> .cuda_env
+echo "export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64" >> .cuda_env
+echo "export XLA_FLAGS=\"--xla_gpu_cuda_data_dir=/usr/local/cuda\"" >> .cuda_env
+
 # Function to check if Python version is between 3.10 and 3.12 (inclusive)
 check_python_version() {
   local python_cmd=$1
@@ -71,7 +114,7 @@ elif [[ "$PYTHON_VERSION" == "3.12" ]]; then
 fi
 
 # Add packages needed for building scipy and other dependencies
-REQUIRED_PACKAGES="$REQUIRED_PACKAGES build-essential libffi-dev"
+REQUIRED_PACKAGES="$REQUIRED_PACKAGES build-essential libffi-dev gfortran"
 
 # Add packages needed for image processing (for cv2 and Pillow)
 REQUIRED_PACKAGES="$REQUIRED_PACKAGES libjpeg-dev libpng-dev"
@@ -121,19 +164,28 @@ else
   if [ -d ".venv" ] && [ -f ".venv/bin/activate" ]; then
     # Activate the virtual environment
     echo "Activating virtual environment..."
-    source .venv/bin/activate
+    # Use . instead of source for better compatibility
+    . .venv/bin/activate || {
+      echo "Failed to activate virtual environment. Using .venv/bin/pip directly."
+      PIP_CMD=".venv/bin/pip"
+      VENV_PYTHON_VERSION=$($PYTHON_BIN -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+      echo "Using Python $VENV_PYTHON_VERSION via .venv/bin/pip"
+    }
     
-    # Use the virtual environment's pip
-    PIP_CMD="pip"
-    
-    # Verify the Python version in the virtual environment
-    VENV_PYTHON_VERSION=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-    echo "Virtual environment is using Python $VENV_PYTHON_VERSION"
-
-    # Double-check compatibility
-    if [[ ! "$VENV_PYTHON_VERSION" =~ ^3\.1[0-2]$ ]]; then
-      echo "Warning: Virtual environment is using Python $VENV_PYTHON_VERSION, which may cause issues with SciPy."
-      echo "Proceeding anyway, but installation might fail."
+    # If activation was successful
+    if [ -n "$VIRTUAL_ENV" ]; then
+      # Use the virtual environment's pip
+      PIP_CMD="pip"
+      
+      # Verify the Python version in the virtual environment
+      VENV_PYTHON_VERSION=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+      echo "Virtual environment is using Python $VENV_PYTHON_VERSION"
+  
+      # Double-check compatibility
+      if [[ ! "$VENV_PYTHON_VERSION" =~ ^3\.1[0-2]$ ]]; then
+        echo "Warning: Virtual environment is using Python $VENV_PYTHON_VERSION, which may cause issues with SciPy."
+        echo "Proceeding anyway, but installation might fail."
+      fi
     fi
   fi
 fi
@@ -146,25 +198,42 @@ $PIP_CMD install --upgrade pip
 echo "Installing dependencies with binary wheels..."
 $PIP_CMD install --upgrade setuptools wheel
 
+# Use a more reliable approach for scipy - if we're in a venv, ensure it's using venv's pip
+if [ -n "$VIRTUAL_ENV" ]; then
+  PIP_CMD=".venv/bin/pip"
+  echo "Using virtual environment pip at $PIP_CMD"
+fi
+
 # Try to find a compatible scipy version
 echo "Installing dependencies..."
 if [[ "$VENV_PYTHON_VERSION" =~ ^3\.1[0-2]$ ]]; then
-  # For Python 3.10-3.12, try scipy 1.11.3 first as it has better compatibility
+  # For Python 3.10-3.12, try scipy 1.11.3 first as it has better compatibility, or fall back to 1.10.1
   echo "Trying scipy 1.11.3 for Python $VENV_PYTHON_VERSION..."
   if $PIP_CMD install --prefer-binary scipy==1.11.3; then
     # Install other dependencies except scipy
     echo "Installing remaining dependencies..."
     $PIP_CMD install --prefer-binary -r <(grep -v '^scipy==' requirements.txt)
   else
-    # If 1.11.3 fails, try the version from requirements.txt
-    echo "Falling back to requirements.txt specified scipy version..."
-    $PIP_CMD install --prefer-binary -r requirements.txt
+    echo "Trying scipy 1.10.1 as fallback..."
+    if $PIP_CMD install --prefer-binary scipy==1.10.1; then
+      # Install other dependencies except scipy
+      echo "Installing remaining dependencies..."
+      $PIP_CMD install --prefer-binary -r <(grep -v '^scipy==' requirements.txt)
+    else
+      # If both versions fail, try the version from requirements.txt
+      echo "Falling back to requirements.txt specified scipy version..."
+      $PIP_CMD install --prefer-binary -r requirements.txt
+    fi
   fi
 else
   # For other Python versions, try the scipy version from requirements.txt directly
   echo "Using requirements.txt as specified..."
   $PIP_CMD install --prefer-binary -r requirements.txt
 fi
+
+# Install torchvision (required by the app but missing from requirements.txt)
+echo "Installing torchvision dependency..."
+$PIP_CMD install --prefer-binary torchvision
 
 # Copy .env.example to .env if .env does not exist
 if [ ! -f ".env" ]; then
@@ -177,4 +246,9 @@ if [ ! -f ".env" ]; then
   fi
 fi
 
-echo "Installation complete. You can now run ./start.sh to launch the app."
+echo "Installation complete. You can now run:"
+echo
+echo "  source .venv/bin/activate  # Activate the virtual environment"
+echo "  ./start.sh                 # Launch the app"
+echo
+echo "IMPORTANT: You must manually activate the virtual environment before running the app!"
