@@ -10,13 +10,14 @@ apt-get upgrade -y
 # install Linux tools and Python 3
 apt-get install -y software-properties-common wget curl git \
     python3-dev python3-pip python3-wheel python3-setuptools \
+    python-is-python3 \
     build-essential libffi-dev gfortran \
     libjpeg-dev libpng-dev \
     libavfilter-dev libavformat-dev libavdevice-dev ffmpeg
 
 # install Python packages
 python3 -m pip install --upgrade pip
-pip3 install --user -r .devcontainer/requirements.txt
+pip3 install --user -r requirements.txt
 
 # update CUDA Linux GPG repository key
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.0-1_all.deb
