@@ -7,17 +7,31 @@ set -e
 apt-get update
 apt-get upgrade -y
 
-# install Linux tools and Python 3
+# install Linux tools and add Python 3.10 repository
 apt-get install -y software-properties-common wget curl git \
-    python3-dev python3-pip python3-wheel python3-setuptools \
-    python-is-python3 \
     build-essential libffi-dev gfortran \
     libjpeg-dev libpng-dev \
     libavfilter-dev libavformat-dev libavdevice-dev ffmpeg
 
+# Add deadsnakes PPA and install Python 3.10
+add-apt-repository ppa:deadsnakes/ppa -y
+apt-get update
+apt-get install -y python3.10 python3.10-dev python3.10-venv python3.10-distutils
+
+# Create symbolic links to make python3.10 the default python3
+update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+update-alternatives --set python3 /usr/bin/python3.10
+update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
+update-alternatives --set python /usr/bin/python3.10
+
+# Install pip for Python 3.10
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+python3.10 get-pip.py
+rm get-pip.py
+
 # install Python packages
-python3 -m pip install --upgrade pip
-pip3 install --user -r requirements.txt
+python3.10 -m pip install --upgrade pip
+python3.10 -m pip install -r requirements.txt
 
 # update CUDA Linux GPG repository key
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.0-1_all.deb
