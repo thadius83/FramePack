@@ -7,6 +7,8 @@
   "runArgs": [
     "--gpus", "all"
   ],
+  "workspaceMount": "source=${localWorkspaceFolder},target=/app,type=bind,consistency=cached",
+  "workspaceFolder": "/app",
   "mounts": [
     "source=framepack-models,target=/app/models,type=volume",
     "source=framepack-outputs,target=/app/outputs,type=volume"
@@ -19,7 +21,7 @@
     "INBROWSER": "false"
   },
   "remoteUser": "root",
-  "forwardPorts": [7880],
+  "forwardPorts": [7880, 7881],
   "customizations": {
     "vscode": {
       "extensions": [
@@ -37,5 +39,7 @@
       }
     }
   },
-  "postCreateCommand": ".devcontainer/post-create.sh"
+  "postCreateCommand": [
+    "bash", ".devcontainer/post-create.sh"
+  ]
 }
