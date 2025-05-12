@@ -22,7 +22,7 @@
     "INBROWSER": "false"
   },
   "remoteUser": "root",
-  "forwardPorts": [7880, 7881],
+  "forwardPorts": [7880, 7881, 7882],
   "customizations": {
     "vscode": {
       "extensions": [

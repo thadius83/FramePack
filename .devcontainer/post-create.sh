@@ -9,6 +9,7 @@ echo "Setting up FramePack development environment..."
 mkdir -p /app/models
 mkdir -p /app/outputs
 mkdir -p /app/hf_download
+mkdir -p /app/loras
 
 # Create .env file from example if it doesn't exist
 if [ ! -f /app/.env ]; then
@@ -29,15 +30,20 @@ cd /app && python demo_gradio_f1.py --server 0.0.0.0 --port 7881' > /usr/local/b
 echo '#\!/bin/bash
 cd /app && ./run-dual-demo.sh' > /usr/local/bin/scripts/start-dual-demo.sh
 
+echo '#\!/bin/bash
+cd /app && python studio.py --server 0.0.0.0 --port 7882' > /usr/local/bin/scripts/start-studio.sh
+
 chmod +x /usr/local/bin/scripts/start-framepack.sh
 chmod +x /usr/local/bin/scripts/start-framepack-f1.sh
 chmod +x /usr/local/bin/scripts/start-dual-demo.sh
+chmod +x /usr/local/bin/scripts/start-studio.sh
 
 # Add scripts to PATH and create aliases
 echo 'export PATH="/usr/local/bin/scripts:${PATH}"' >> /etc/bash.bashrc
 echo 'alias start-framepack="/usr/local/bin/scripts/start-framepack.sh"' >> /etc/bash.bashrc
 echo 'alias start-framepack-f1="/usr/local/bin/scripts/start-framepack-f1.sh"' >> /etc/bash.bashrc
 echo 'alias start-dual-demo="/usr/local/bin/scripts/start-dual-demo.sh"' >> /etc/bash.bashrc
+echo 'alias start-studio="/usr/local/bin/scripts/start-studio.sh"' >> /etc/bash.bashrc
 
 # Create a welcome message
 echo "echo '
@@ -47,6 +53,7 @@ Available commands:
   start-framepack    - Start FramePack Gradio app on port 7880
   start-framepack-f1 - Start FramePack-F1 Gradio app on port 7881
   start-dual-demo    - Run both FramePack and FramePack-F1 simultaneously
+  start-studio       - Start FramePack Studio interface on port 7882
 
 Environment is ready to use.
 '" >> /etc/bash.bashrc
