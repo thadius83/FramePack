@@ -11,7 +11,8 @@
   "workspaceFolder": "/app",
   "mounts": [
     "source=framepack-models,target=/app/models,type=volume",
-    "source=framepack-outputs,target=/app/outputs,type=volume"
+    "source=framepack-outputs,target=/app/outputs,type=volume",
+    "source=framepack-loras,target=/app/loras,type=volume"
   ],
   "remoteEnv": {
     "PYTHONPATH": "/app",

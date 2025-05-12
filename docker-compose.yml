@@ -8,12 +8,13 @@ services:
     container_name: framepack-app
     ports:
       - "7880:7880"
-      - "7881:7881"  
+      - "7881:7881"
     volumes:
       - ./:/app
       - ./models:/app/models
       - ${HF_CACHE_DIR}:/app/hf_download
       - ./outputs:/app/outputs
+      - ./loras:/app/loras
     environment:
       - SERVER=${SERVER}
       - PORT=${PORT}
@@ -33,3 +34,36 @@ services:
               capabilities: [gpu]
     # Run both demos in parallel
     command: /bin/bash run-dual-demo.sh
+
+  framepack-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: framepack-studio
+    ports:
+      - "7882:7882"
+    volumes:
+      - ./:/app
+      - ./models:/app/models
+      - ${HF_CACHE_DIR}:/app/hf_download
+      - ./outputs:/app/outputs
+      - ./loras:/app/loras
+      - ./loras:/app/loras
+    environment:
+      - SERVER=${SERVER}
+      - PORT=7882
+      - SHARE=${SHARE}
+      - INBROWSER=${INBROWSER}
+      - MODEL_DIR=${MODEL_DIR}
+      - OUTPUT_DIR=${OUTPUT_DIR}
+      - HF_TOKEN=${HF_TOKEN}
+      - HF_HOME=/app/hf_download
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # Run the studio interface
+    command: /bin/bash start-studio.sh
