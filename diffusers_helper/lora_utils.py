@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 from typing import Dict, List, Optional, Union
 from diffusers.loaders.lora_pipeline import _fetch_state_dict
 from diffusers.loaders.lora_conversion_utils import _convert_hunyuan_video_lora_to_diffusers
@@ -32,32 +33,68 @@ def load_lora(transformer, lora_path: Path, weight_name: Optional[str] = "pytorc
         None)
 
     state_dict = _convert_hunyuan_video_lora_to_diffusers(state_dict)
-    
+
     adapter_name = weight_name.split(".")[0]
-    
+
     # Check if adapter already exists and delete it if it does
     if hasattr(transformer, 'peft_config') and adapter_name in transformer.peft_config:
         print(f"Adapter '{adapter_name}' already exists. Removing it before loading again.")
         # Use delete_adapters (plural) instead of delete_adapter
         transformer.delete_adapters([adapter_name])
-    
-    # Load the adapter with the original name
-    transformer.load_lora_adapter(state_dict, network_alphas=None, adapter_name=adapter_name)
-    print(f"LoRA weights '{adapter_name}' loaded successfully.")
+
+    # Add a safety check for empty state_dict
+    if not state_dict:
+        print(f"Warning: Empty state dict for LoRA '{adapter_name}', skipping.")
+        return transformer
+
+    # Add safety check for rank values
+    rank_pattern = re.compile(r'.*\.lora_A\.weight')
+    rank_values = []
+    for key in state_dict.keys():
+        if rank_pattern.match(key):
+            rank_values.append(state_dict[key].shape[0])
+
+    if not rank_values:
+        print(f"Warning: No rank values found in LoRA '{adapter_name}', using default rank 4")
+        rank = 4
+        # Create dummy rank dict for peft
+        for key in list(state_dict.keys()):
+            if key.endswith(".weight"):
+                base_key = key.rsplit(".", 1)[0]
+                if "lora_A" in base_key:
+                    dummy_key = base_key.replace("lora_A", "lora_B")
+                    if dummy_key + ".weight" not in state_dict:
+                        print(f"Adding dummy rank for {dummy_key}")
+                        state_dict[f"{base_key}.alpha"] = torch.tensor(rank)
+
+    try:
+        # Load the adapter with the original name
+        transformer.load_lora_adapter(state_dict, network_alphas=None, adapter_name=adapter_name)
+        print(f"LoRA weights '{adapter_name}' loaded successfully.")
+    except Exception as e:
+        print(f"Error loading LoRA '{adapter_name}': {str(e)}")
+        print("This may be due to an incompatible LoRA format. Skipping.")
     
     return transformer
 
 def unload_all_loras(transformer):
     """
-    Completely unload all LoRA adapters from the transformer model.
+    Unload all LoRA adapters from the transformer model.
+
+    Args:
+        transformer: The transformer model from which to unload LoRA adapters.
+
+    Returns:
+        The transformer model with all LoRA adapters unloaded.
     """
+    if transformer is None:
+        print("Transformer is None, cannot unload LoRAs")
+        return transformer
+
     if hasattr(transformer, 'peft_config') and transformer.peft_config:
-        # Get all adapter names
         adapter_names = list(transformer.peft_config.keys())
-        
         if adapter_names:
-            print(f"Removing all LoRA adapters: {', '.join(adapter_names)}")
-            # Delete all adapters
+            print(f"Unloading all LoRAs: {', '.join(adapter_names)}")
             transformer.delete_adapters(adapter_names)
             
             # Force cleanup of any remaining adapter references
@@ -76,21 +113,18 @@ def unload_all_loras(transformer):
                     if isinstance(module.scaling, dict):
                         module.scaling.clear()
             
-            print("All LoRA adapters have been completely removed.")
-        else:
-            print("No LoRA adapters found to remove.")
+            print("All LoRAs unloaded successfully")
     else:
-        print("Model doesn't have any LoRA adapters or peft_config.")
+        print("No LoRAs loaded in transformer")
     
     # Force garbage collection
     import gc
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-    
+
     return transformer
 
-    
 # TODO(neph1): remove when HunyuanVideoTransformer3DModelPacked is in _SET_ADAPTER_SCALE_FN_MAPPING
 def set_adapters(
         transformer,
