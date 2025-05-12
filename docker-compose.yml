@@ -1,0 +1,35 @@
+version: "3"
+
+services:
+  framepack:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: framepack-app
+    ports:
+      - "7880:7880"
+      - "7881:7881"  
+    volumes:
+      - ./:/app
+      - ./models:/app/models
+      - ${HF_CACHE_DIR}:/app/hf_download
+      - ./outputs:/app/outputs
+    environment:
+      - SERVER=${SERVER}
+      - PORT=${PORT}
+      - PORT_F1=${PORT_F1}
+      - SHARE=${SHARE}
+      - INBROWSER=${INBROWSER}
+      - MODEL_DIR=${MODEL_DIR}
+      - OUTPUT_DIR=${OUTPUT_DIR}
+      - HF_TOKEN=${HF_TOKEN}
+      - HF_HOME=/app/hf_download
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # Run both demos in parallel
+    command: /bin/bash run-dual-demo.sh

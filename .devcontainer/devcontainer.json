@@ -1,0 +1,41 @@
+{
+  "name": "FramePack Development",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "runArgs": [
+    "--gpus", "all"
+  ],
+  "mounts": [
+    "source=framepack-models,target=/app/models,type=volume",
+    "source=framepack-outputs,target=/app/outputs,type=volume"
+  ],
+  "remoteEnv": {
+    "PYTHONPATH": "/app",
+    "SERVER": "0.0.0.0",
+    "PORT": "7880",
+    "SHARE": "false",
+    "INBROWSER": "false"
+  },
+  "remoteUser": "root",
+  "forwardPorts": [7880],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true,
+        "python.formatting.provider": "black",
+        "editor.formatOnSave": true
+      }
+    }
+  },
+  "postCreateCommand": ".devcontainer/post-create.sh"
+}
